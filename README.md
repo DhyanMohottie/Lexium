@@ -1,7 +1,7 @@
 # Lexium Mobile
 > A neurosymbolic AI-powered legal advisory application for Sri Lanka.
 
-**Repository:** https://github.com/DhyanMohottie/Lexora
+**Repository:** https://github.com/DhyanMohottie/Lexium
 
 ---
 
@@ -106,8 +106,8 @@ Lexora/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/DhyanMohottie/Lexora
-cd Lexora
+git clone https://github.com/DhyanMohottie/Lexium
+cd Lexium
 ```
 
 ### 2. Set Up Flask AI Backend

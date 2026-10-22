@@ -35,6 +35,20 @@ class SelfCorrectionController:
         self.max_retries = max_retries
         print(f"✅ Self-Correction Controller ready (threshold={threshold:.0%}, retries={max_retries})")
 
+    def _log_answer(self, tag: str, answer: str):
+        print(f"\n=== [{tag}] LLM Output ===")
+        print(answer)
+        print(f"=== End [{tag}] ===\n")
+
+    def _log_scores(self, tag: str, validation: dict):
+        print(f"--- [{tag}] Scores ---")
+        print(f"   GNN Score:        {validation.get('gnn_score', 0):.4f}")
+        print(f"   Symbolic Conf.:   {validation.get('symbolic_confidence', 0):.4f}")
+        print(f"   Fused Score:      {validation.get('fused_score', 0):.4f}")
+        print(f"   Rules Satisfied:  {validation.get('num_satisfied', 'N/A')}")
+        print(f"   Rules Violated:   {validation.get('num_violations', 'N/A')}")
+        print(f"----------------------\n")
+
     def process(self, question: str, conversation_history: list = None) -> dict:
         """
         Full pipeline.
@@ -49,16 +63,23 @@ class SelfCorrectionController:
                 'was_corrected': bool
             }
         """
+        print(f"\n########## NEW REQUEST (self_correction) ##########")
+        print(f"Question: {question}\n")
+
         # Step 1: Generate initial LLM response
         initial_answer = self.llm.generate(question, conversation_history)
+        self._log_answer("INITIAL", initial_answer)
 
         # Step 2: Validate initial answer
         initial_validation = self.validate_fn(initial_answer)
         initial_score = initial_validation['fused_score']
         initial_confidence = self._build_confidence(initial_validation)
+        self._log_scores("INITIAL", initial_validation)
 
         # Step 3: Check if it passes
         if initial_score >= self.threshold:
+            print(f"✅ Initial answer PASSED threshold ({initial_score:.0%} >= {self.threshold:.0%}). No correction needed.")
+            print(f"########## REQUEST COMPLETE ##########\n")
             return {
                 'answer': initial_answer,
                 'initial_answer': initial_answer,
@@ -67,40 +88,53 @@ class SelfCorrectionController:
                 'corrections_made': 0,
                 'was_corrected': False
             }
+        
+        print(f"⚠️  Initial answer FAILED threshold ({initial_score:.0%} < {self.threshold:.0%}). Starting correction loop...")
 
         # Step 4: Correction loop
         best_answer = initial_answer
         best_score = initial_score
         best_validation = initial_validation
         current_validation = initial_validation
+        attempts_run = 0
 
         for attempt in range(1, self.max_retries + 1):
+            attempts_run = attempt
+            print(f"\n>>> Correction attempt {attempt}/{self.max_retries} <<<")
             try:
                 # Re-prompt LLM with feedback (user doesn't see this)
                 corrected_answer = self.llm.generate_with_context(
                     question=question,
                     validation_result=current_validation
                 )
+                self._log_answer(f"ATTEMPT {attempt}", corrected_answer)
 
                 # Validate corrected answer
                 corrected_validation = self.validate_fn(corrected_answer)
                 corrected_score = corrected_validation['fused_score']
+                self._log_scores(f"ATTEMPT {attempt}", corrected_validation)
 
                 # Track best
                 if corrected_score > best_score:
                     best_answer = corrected_answer
                     best_score = corrected_score
                     best_validation = corrected_validation
+                    print(f"   → New best score: {best_score:.0%}")
 
                 # Pass threshold?
                 if corrected_score >= self.threshold:
+                    print(f"✅ Attempt {attempt} PASSED threshold ({corrected_score:.0%} >= {self.threshold:.0%}). Stopping.")
+                    current_validation = corrected_validation
                     break
-
+                
+                print(f"⚠️  Attempt {attempt} still below threshold ({corrected_score:.0%} < {self.threshold:.0%}).")
                 current_validation = corrected_validation
 
             except Exception as e:
                 print(f"Correction attempt {attempt} failed: {e}")
                 break
+        
+        print(f"\n########## REQUEST COMPLETE — best score: {best_score:.0%}, attempts used: {attempts_run} ##########\n")
 
         # Step 5: Return best
         return {
@@ -108,7 +142,7 @@ class SelfCorrectionController:
             'initial_answer': initial_answer,
             'confidence': self._build_confidence(best_validation),
             'initial_confidence': initial_confidence,
-            'corrections_made': len([1 for _ in range(1)]),  # simplified
+            'corrections_made': attempts_run,
             'was_corrected': best_answer != initial_answer
         }
 
