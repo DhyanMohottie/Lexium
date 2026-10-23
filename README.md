@@ -15,8 +15,9 @@ validated by a neurosymbolic pipeline before being shown to the user.
 
 The validation pipeline operates as follows:
 - A **Heterogeneous Graph Attention Network (HeteroGAT)** trained 
-  on 3,059 real Sri Lankan court cases scores the legal validity 
-  of each response
+  on 3,059 labelled legal claims extracted from 540 Sri Lankan court
+  case files, linked to 534 statutes and 274 sections across ten 
+  edge types.
 - A **symbolic reasoning engine** evaluates the response against 
   10 weighted rules (citation validity, legal language, statute 
   specificity, etc.)
